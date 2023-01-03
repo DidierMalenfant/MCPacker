@@ -22,6 +22,9 @@ dependencies = ["semver"]
 
 dynamic = ["version"]
 
+[project.urls]
+Homepage = "https://github.com/DidierMalenfant/MCPacker"
+
 [tool.hatch.version]
 path = "MCPacker/__about__.py"
 
