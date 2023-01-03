@@ -78,26 +78,37 @@ class MCPacker:
 
         MCPacker.setupWorkFolder()
 
-        new_version = None
-
         manifest_file = os.path.join(cwd, 'manifest.json')
         if os.path.exists(manifest_file):
-            new_version = MCPacker.increaseVersionNumberIn(manifest_file, self.component_to_increase)
-            MCPacker.pack(cwd, os.path.join(self.destination_folder, basename + '-' + str(new_version) + '.mcpack'))
+            MCPacker.increaseVersionNumberIn(manifest_file, self.component_to_increase)
+
+            uuid, version = MCPacker.getPackInfoFrom(manifest_file)
+            if uuid is None:
+                raise RuntimeError('Can\'t get information from a pack we created earlier.')
+
+            MCPacker.pack(cwd, os.path.join(self.destination_folder, basename + '-' + str(version) + '.mcpack'))
             return
 
         source_packs: List[str] = MCPacker.listManifestFilesFromPacksIn(cwd)
         for manifest_file in source_packs:
-            other_new_version = MCPacker.increaseVersionNumberIn(manifest_file, self.component_to_increase)
-
-            if other_new_version is not None and (new_version is None or other_new_version > new_version):
-                new_version = other_new_version
-
-            pack_folder: str = os.path.dirname(manifest_file)
-            MCPacker.pack(pack_folder, os.path.join(MCPacker.workFolder(), os.path.basename(pack_folder) + '-' + str(other_new_version) + '.mcpack'))
+            MCPacker.increaseVersionNumberIn(manifest_file, self.component_to_increase)
 
         MCPacker.syncVersionNumbers(cwd)
-        MCPacker.pack(MCPacker.workFolder(), os.path.join(self.destination_folder, basename + '-' + str(new_version) + '.mcaddon'))
+
+        addon_version: VersionInfo = None
+
+        for manifest_file in source_packs:
+            uuid, version = MCPacker.getPackInfoFrom(manifest_file)
+            if uuid is None:
+                raise RuntimeError('Can\'t get information from a pack we created earlier.')
+
+            if addon_version is None or version > addon_version:
+                addon_version = version
+
+            pack_folder: str = os.path.dirname(manifest_file)
+            MCPacker.pack(pack_folder, os.path.join(MCPacker.workFolder(), os.path.basename(pack_folder) + '-' + str(version) + '.mcpack'))
+
+        MCPacker.pack(MCPacker.workFolder(), os.path.join(self.destination_folder, basename + '-' + str(addon_version) + '.mcaddon'))
 
     def shutdown(self) -> None:
         print("Done.")
@@ -156,30 +167,26 @@ class MCPacker:
         return None, None
 
     @classmethod
-    def increaseVersionNumberIn(cls, manifest_file: str, which_component: VersionComponent = VersionComponent.Patch) -> VersionInfo:
+    def increaseVersionNumberIn(cls, manifest_file: str, which_component: VersionComponent = VersionComponent.Patch):
         file = open(manifest_file, 'r')
         json_data = json.load(file)
         file.close()
 
-        new_version = None
+        modified_something = False
+
         header = json_data.get('header')
         if header is not None:
-            new_version = MCPacker.increaseVersionIn(header, which_component)
+            modified_something = MCPacker.increaseVersionIn(header, which_component)
 
         modules = json_data.get('modules')
         if modules is not None:
             for module in modules:
-                other_new_version = MCPacker.increaseVersionIn(module, which_component)
+                modified_something = MCPacker.increaseVersionIn(module, which_component)
 
-                if other_new_version is not None and (new_version is None or other_new_version > new_version):
-                    new_version = other_new_version
-
-        if other_new_version is not None:
+        if modified_something:
             file = open(manifest_file, 'w')
             json.dump(json_data, file, indent=2)
             file.close()
-
-        return other_new_version
 
     @classmethod
     def setVersionInJsonElement(cls, version: VersionInfo, json_element) -> bool:
@@ -188,10 +195,10 @@ class MCPacker:
         json_element[2] = version.patch
 
     @classmethod
-    def increaseVersionIn(cls, json_element: List, which_component: VersionComponent = VersionComponent.Patch) -> VersionInfo:
+    def increaseVersionIn(cls, json_element: List, which_component: VersionComponent = VersionComponent.Patch) -> bool:
         json_version = json_element.get('version')
         if json_version is None and len(json_version) != 3:
-            return None
+            return False
 
         old_semver_version = VersionInfo.parse(f'{json_version[0]}.{json_version[1]}.{json_version[2]}')
 
@@ -208,7 +215,7 @@ class MCPacker:
         if json_desc is not None:
             json_element['description'] = json_desc.replace('v' + str(old_semver_version), 'v' + str(new_semver_version))
 
-        return new_semver_version
+        return True
 
     @classmethod
     def pack(cls, source_folder: str, destination_file: str):
