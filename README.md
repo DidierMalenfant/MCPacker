@@ -1,5 +1,7 @@
 # MCPacker
 
+[![MIT License](https://img.shields.io/github/license/DidierMalenfant/MCPacker)](https://spdx.org/licenses/MIT.html) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/MCPacker.svg)](https://python.org) [![PyPI - Version](https://img.shields.io/pypi/v/MCPacker.svg)](https://pypi.org/project/MCPacker)
+
 A tool to easily pack Minecraft addons.
 
 ### Usage
